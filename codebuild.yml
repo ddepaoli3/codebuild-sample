@@ -1,7 +1,11 @@
 Parameters:
-  bucketname:
+  githubRepo:
     Type: String
-    Default: workshop.codebuild.cloudformation
+    Default: https://github.com/liuggio/docker-workshop-orchestration
+  DockerfilePath:
+    Type: String
+    Default: 4-your-image/Dockerfile
+
 Resources:
   CodebuildExample:
     Type: "AWS::CodeBuild::Project"
@@ -13,20 +17,21 @@ Resources:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
-          - Name: EnvName
-            Value: EnvValue
+        - Name: DOCKERFILE
+          Value: !Ref DockerfilePath
+
         Image: aws/codebuild/docker:1.12.1
       Name: Codebuild-example
       ServiceRole: !Ref CodeBuildServiceRole
       Source:
-        Location: !Sub ${bucketname}/source.zip
-        Type: "S3"
+        Location: !Ref githubRepo
+        Type: "GITHUB"
         BuildSpec: |
           version: 0.2
           phases:
             build:
               commands:
-                - docker build .
+                - docker build -f ${DOCKERFILE} .
             post_build:
               commands:
                 - printf '{"tag":"%s"}' $TAG > build.json
