@@ -5,6 +5,9 @@ Parameters:
   DockerfilePath:
     Type: String
     Default: 4-your-image/Dockerfile
+  ECRRepositoryApp:
+    Type: String
+    Default: workshoptest
 
 Resources:
   CodebuildExample:
@@ -19,7 +22,8 @@ Resources:
         EnvironmentVariables:
         - Name: DOCKERFILE
           Value: !Ref DockerfilePath
-
+        - Name: REPOSITORY_URI
+          Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryApp}
         Image: aws/codebuild/docker:1.12.1
       Name: Codebuild-example
       ServiceRole: !Ref CodeBuildServiceRole
@@ -31,9 +35,11 @@ Resources:
           phases:
             build:
               commands:
-                - docker build -f ${DOCKERFILE} .
+                - $(aws ecr get-login)
+                - docker build --tag "${REPOSITORY_URI}" -f ${DOCKERFILE} .
             post_build:
               commands:
+                - docker push ${REPOSITORY_URI}
                 - printf '{"tag":"%s"}' $TAG > build.json
           artifacts:
             files: build.json
