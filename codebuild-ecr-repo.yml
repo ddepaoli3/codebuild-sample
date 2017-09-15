@@ -1,0 +1,99 @@
+---
+
+Parameters:
+  ECRrepositoryName:
+    Type: String
+    Default: deloitte.daniel.repository
+  CodebuildName:
+    Type: String
+    Default: DeloitteDanielCodebuild
+  githubRepo:
+    Type: String
+    Default: https://github.com/liuggio/docker-workshop-orchestration
+  DockerfilePath:
+    Type: String
+    Default: 4-your-image/Dockerfile
+
+Resources:
+
+  ECRrepository:
+    Type: "AWS::ECR::Repository"
+    Properties: 
+      RepositoryName: !Ref ECRrepositoryName
+      #RepositoryPolicyText: JSON object
+
+  CodebuildExample:
+    Type: "AWS::CodeBuild::Project"
+    Properties: 
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Description: Build del container docker da Dockerfile
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+        - Name: DOCKERFILE
+          Value: !Ref DockerfilePath
+        - Name: REPOSITORY_URI
+          Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRrepository}
+        Image: aws/codebuild/docker:1.12.1
+      Name: !Ref CodebuildName
+      ServiceRole: !Ref CodeBuildServiceRole
+      Source:
+        Location: !Ref githubRepo
+        Type: "GITHUB"
+        BuildSpec: |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - $(aws ecr get-login)
+                - docker build --tag "${REPOSITORY_URI}" -f ${DOCKERFILE} .
+            post_build:
+              commands:
+                - docker push ${REPOSITORY_URI}
+                - printf '{"tag":"%s"}' $TAG > build.json
+          artifacts:
+            files: build.json
+
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codebuild.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ecr:GetAuthorizationToken
+              - Resource: !Sub arn:aws:s3:::*
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:*
+                Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
